@@ -1,0 +1,486 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTH / MULTI-TENANT ====================
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  logo        String?
+  industry    String?
+  website     String?
+  address     String?  @db.Text
+  city        String?
+  state       String?
+  country     String?  @default("India")
+  pincode     String?
+  phone       String?
+  email       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  departments  Department[]
+  positions    Position[]
+  employees    Employee[]
+  users        User[]
+  okrCycles    OkrCycle[]
+  appraisalCycles AppraisalCycle[]
+  announcements Announcement[]
+
+  @@map("companies")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  companyId   String
+  employeeId  String?  @unique
+  email       String   @unique
+  password    String
+  firstName   String
+  lastName    String
+  avatar      String?
+  isActive    Boolean  @default(true)
+  lastLogin   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  userRoles   UserRole[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // CLIENT_ADMIN, CEO, CXO, MANAGER, FLM, IC
+  displayName String
+  description String?
+  permissions Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @db.Text
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ==================== HRMS - ORG STRUCTURE ====================
+
+model Department {
+  id          String   @id @default(uuid())
+  companyId   String
+  parentId    String?
+  name        String
+  code        String?
+  description String?  @db.Text
+  type        String   @default("DEPARTMENT") // BUSINESS_UNIT, DEPARTMENT, TEAM
+  headId      String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  parent      Department? @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children    Department[] @relation("DeptHierarchy")
+  positions   Position[]
+  employees   Employee[]
+  head        Employee? @relation("DeptHead", fields: [headId], references: [id])
+  announcements Announcement[]
+
+  @@unique([companyId, code])
+  @@map("departments")
+}
+
+model Position {
+  id          String   @id @default(uuid())
+  companyId   String
+  departmentId String?
+  title       String
+  code        String?
+  level       String?  // IC, FLM, MANAGER, CXO, CEO
+  grade       String?
+  band        String?
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company    @relation(fields: [companyId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
+  employees   Employee[]
+
+  @@map("positions")
+}
+
+model Employee {
+  id              String    @id @default(uuid())
+  companyId       String
+  employeeCode    String
+  firstName       String
+  lastName        String
+  email           String?
+  personalEmail   String?
+  phone           String?
+  alternatePhone  String?
+  gender          String?   // MALE, FEMALE, OTHER
+  dateOfBirth     DateTime?
+  dateOfJoining   DateTime?
+  dateOfLeaving   DateTime?
+  status          String    @default("ACTIVE") // ACTIVE, INACTIVE, ON_NOTICE, TERMINATED
+  employmentType  String?   // FULL_TIME, PART_TIME, CONTRACT, INTERN
+  departmentId    String?
+  positionId      String?
+  managerId       String?
+  grade           String?
+  band            String?
+  location        String?
+  city            String?
+  state           String?
+  avatar          String?
+  // Address
+  currentAddress  String?   @db.Text
+  permanentAddress String?  @db.Text
+  // Emergency
+  emergencyContact String?
+  emergencyPhone   String?
+  // Bank Details
+  bankName        String?
+  bankAccount     String?
+  ifscCode        String?
+  pan             String?
+  aadhaar         String?
+  // Meta
+  customFields    Json?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  company         Company    @relation(fields: [companyId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
+  position        Position?  @relation(fields: [positionId], references: [id])
+  manager         Employee?  @relation("ManagerReports", fields: [managerId], references: [id])
+  reportees       Employee[] @relation("ManagerReports")
+  deptHead        Department[] @relation("DeptHead")
+  user            User?
+  appraisalGiven  AppraisalFeedback[] @relation("FeedbackGiver")
+  appraisalReceived AppraisalFeedback[] @relation("FeedbackReceiver")
+  objectives      Objective[] @relation("ObjectiveOwner")
+  keyResults      KeyResult[] @relation("KROwner")
+  tasks           KraTask[]  @relation("TaskAssignee")
+  tasksCreated    KraTask[]  @relation("TaskCreator")
+  tasksApproved   KraTask[]  @relation("TaskApprover")
+  announcements   Announcement[] @relation("AnnouncementAuthor")
+
+  @@unique([companyId, employeeCode])
+  @@map("employees")
+}
+
+// ==================== HRMS - APPRAISAL ====================
+
+model AppraisalCycle {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  type        String   // ANNUAL, SEMI_ANNUAL, QUARTERLY
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, CLOSED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  feedbacks   AppraisalFeedback[]
+
+  @@map("appraisal_cycles")
+}
+
+model AppraisalFeedback {
+  id          String   @id @default(uuid())
+  cycleId     String
+  giverId     String
+  receiverId  String
+  type        String   // SELF, PEER, MANAGER, SUBORDINATE
+  rating      Float?
+  comments    String?  @db.Text
+  strengths   String?  @db.Text
+  improvements String?  @db.Text
+  status      String   @default("PENDING") // PENDING, SUBMITTED
+  submittedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cycle       AppraisalCycle @relation(fields: [cycleId], references: [id])
+  giver       Employee @relation("FeedbackGiver", fields: [giverId], references: [id])
+  receiver    Employee @relation("FeedbackReceiver", fields: [receiverId], references: [id])
+
+  @@map("appraisal_feedback")
+}
+
+// ==================== KRA / OKR ====================
+
+model OkrCycle {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  type        String   // ANNUAL, QUARTERLY, MONTHLY
+  year        Int
+  quarter     Int?     // 1-4
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, CLOSED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company    @relation(fields: [companyId], references: [id])
+  objectives  Objective[]
+
+  @@map("okr_cycles")
+}
+
+model Objective {
+  id            String   @id @default(uuid())
+  companyId     String?
+  cycleId       String
+  ownerId       String?
+  parentId      String?  // for cascading objectives
+  title         String
+  description   String?  @db.Text
+  type          String   @default("INDIVIDUAL") // COMPANY, DEPARTMENT, TEAM, INDIVIDUAL
+  level         String   @default("IC") // CEO, CXO, MANAGER, FLM, IC
+  departmentId  String?
+  status        String   @default("ON_TRACK") // NOT_STARTED, ON_TRACK, AT_RISK, BEHIND, COMPLETED
+  progress      Float    @default(0) // 0-100
+  weight        Float    @default(1)
+  isPublic      Boolean  @default(true)
+  tags          Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cycle         OkrCycle  @relation(fields: [cycleId], references: [id])
+  owner         Employee?  @relation("ObjectiveOwner", fields: [ownerId], references: [id])
+  parent        Objective? @relation("ObjHierarchy", fields: [parentId], references: [id])
+  children      Objective[] @relation("ObjHierarchy")
+  keyResults    KeyResult[]
+  checkins      KraCheckin[]
+  comments      KraComment[]
+  history       KraHistory[]
+
+  @@map("objectives")
+}
+
+model KeyResult {
+  id            String   @id @default(uuid())
+  objectiveId   String
+  ownerId       String?
+  title         String
+  description   String?  @db.Text
+  type          String   @default("PERCENTAGE") // PERCENTAGE, NUMBER, CURRENCY, BOOLEAN, MILESTONE
+  unit          String?
+  startValue    Float    @default(0)
+  targetValue   Float    @default(100)
+  currentValue  Float    @default(0)
+  progress      Float    @default(0) // 0-100
+  weight        Float    @default(1)
+  trackingType  String   @default("MORE_IS_BETTER") // MORE_IS_BETTER, LESS_IS_BETTER, TARGET_MATCH
+  status        String   @default("ON_TRACK")
+  dueDate       DateTime?
+  qualitative   Boolean  @default(false)
+  qualitativeNote String? @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  objective     Objective  @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  owner         Employee?  @relation("KROwner", fields: [ownerId], references: [id])
+  actionPlans   ActionPlan[]
+  blockers      KraBlocker[]
+  checkins      KraCheckin[]
+  comments      KraComment[]
+
+  @@map("key_results")
+}
+
+model ActionPlan {
+  id            String   @id @default(uuid())
+  keyResultId   String
+  title         String
+  description   String?  @db.Text
+  dueDate       DateTime?
+  status        String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, CANCELLED
+  priority      String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  progress      Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  keyResult     KeyResult @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+  tasks         KraTask[]
+  blockers      KraBlocker[]
+
+  @@map("action_plans")
+}
+
+model KraTask {
+  id            String   @id @default(uuid())
+  actionPlanId  String
+  assigneeId    String?
+  title         String
+  description   String?  @db.Text
+  dueDate       DateTime?
+  status        String   @default("TODO") // TODO, IN_PROGRESS, REVIEW, DONE, BLOCKED
+  priority      String   @default("MEDIUM")
+  estimatedHours Float?
+  actualHours    Float?
+  requiresApproval Boolean @default(false)
+  approvalStatus String  @default("APPROVED") // PENDING, APPROVED, REJECTED
+  creatorId      String?
+  approvedById   String?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  actionPlan    ActionPlan @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  assignee      Employee?  @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator       Employee?  @relation("TaskCreator", fields: [creatorId], references: [id])
+  approver      Employee?  @relation("TaskApprover", fields: [approvedById], references: [id])
+  blockers      KraBlocker[]
+  comments      KraComment[]
+
+  @@map("kra_tasks")
+}
+
+model KraBlocker {
+  id            String   @id @default(uuid())
+  objectiveId   String?
+  keyResultId   String?
+  actionPlanId  String?
+  taskId        String?
+  title         String
+  description   String?  @db.Text
+  severity      String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status        String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  reportedById  String?
+  resolvedById  String?
+  resolvedAt    DateTime?
+  resolution    String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  keyResult     KeyResult?  @relation(fields: [keyResultId], references: [id])
+  actionPlan    ActionPlan? @relation(fields: [actionPlanId], references: [id])
+  task          KraTask?    @relation(fields: [taskId], references: [id])
+  comments      KraComment[]
+
+  @@map("kra_blockers")
+}
+
+model KraCheckin {
+  id            String   @id @default(uuid())
+  objectiveId   String?
+  keyResultId   String?
+  progress      Float
+  previousProgress Float?
+  note          String?  @db.Text
+  mood          String?  // GREAT, GOOD, NEUTRAL, CONCERNED, CRITICAL
+  checkinDate   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  objective     Objective?  @relation(fields: [objectiveId], references: [id])
+  keyResult     KeyResult?  @relation(fields: [keyResultId], references: [id])
+
+  @@map("kra_checkins")
+}
+
+model KraComment {
+  id            String   @id @default(uuid())
+  objectiveId   String?
+  keyResultId   String?
+  taskId        String?
+  blockerId     String?
+  content       String   @db.Text
+  authorId      String?
+  parentId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  objective     Objective?  @relation(fields: [objectiveId], references: [id])
+  keyResult     KeyResult?  @relation(fields: [keyResultId], references: [id])
+  task          KraTask?    @relation(fields: [taskId], references: [id])
+  blocker       KraBlocker? @relation(fields: [blockerId], references: [id])
+  parent        KraComment? @relation("CommentThread", fields: [parentId], references: [id])
+  replies       KraComment[] @relation("CommentThread")
+
+  @@map("kra_comments")
+}
+
+model KraHistory {
+  id            String   @id @default(uuid())
+  objectiveId   String?
+  entityType    String   // OBJECTIVE, KEY_RESULT, ACTION_PLAN, TASK
+  entityId      String
+  action        String   // CREATED, UPDATED, STATUS_CHANGED, PROGRESS_UPDATED
+  previousValue Json?
+  newValue      Json?
+  changedById   String?
+  createdAt     DateTime @default(now())
+
+  objective     Objective? @relation(fields: [objectiveId], references: [id])
+
+  @@map("kra_history")
+}
+
+// ==================== COMMUNICATIONS ====================
+
+model Announcement {
+  id             String   @id @default(uuid())
+  companyId      String
+  title          String
+  message        String   @db.Text
+  targetAudience String   @default("COMPANY") // COMPANY, DEPARTMENT, TEAM
+  departmentId   String?  // If targetAudience is DEPARTMENT or TEAM
+  priorityLevel  String   @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  publishDate    DateTime @default(now())
+  authorId       String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company        Company    @relation(fields: [companyId], references: [id])
+  department     Department? @relation(fields: [departmentId], references: [id])
+  author         Employee   @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+
+  @@map("announcements")
+}

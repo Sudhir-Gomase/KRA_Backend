@@ -180,26 +180,88 @@ export default async function analyticsRoutes(app) {
     const cId = request.query.companyId || request.user.companyId
     console.log(`[HRMS Analytics] Fetching overview for companyId: ${cId}, User: ${request.user.email}`)
 
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+    // Use a single DB connection for all heavy analytics queries
     const [
       total, active, byDept, byPos, byGender, recentJoiners,
-      divCount, deptCount, teamCount, subteamCount, leaders, allEmployees
-    ] = await Promise.all([
+      divCount, deptCount, teamCount, subteamCount,
+      allEmployees, ceo, hiredThisMonth, leftThisMonth, cxoCount
+    ] = await prisma.$transaction([
       prisma.employee.count({ where: { companyId: cId } }),
       prisma.employee.count({ where: { companyId: cId, status: 'ACTIVE' } }),
-      prisma.employee.groupBy({ by: ['departmentId'], where: { companyId: cId, departmentId: { not: null } }, _count: { _all: true } }),
-      prisma.employee.groupBy({ by: ['positionId'], where: { companyId: cId, positionId: { not: null } }, _count: { _all: true } }),
-      prisma.employee.groupBy({ by: ['gender'], where: { companyId: cId, gender: { not: null } }, _count: { _all: true } }),
+      prisma.employee.groupBy({
+        by: ['departmentId'],
+        where: { companyId: cId, departmentId: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.employee.groupBy({
+        by: ['positionId'],
+        where: { companyId: cId, positionId: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.employee.groupBy({
+        by: ['gender'],
+        where: { companyId: cId, gender: { not: null } },
+        _count: { _all: true },
+      }),
       prisma.employee.findMany({
-        where: { companyId: cId, dateOfJoining: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
-        select: { id: true, firstName: true, lastName: true, dateOfJoining: true, department: { select: { name: true } }, avatar: true },
-        orderBy: { dateOfJoining: 'desc' }, take: 10
+        where: {
+          companyId: cId,
+          dateOfJoining: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          dateOfJoining: true,
+          department: { select: { name: true } },
+          avatar: true,
+        },
+        orderBy: { dateOfJoining: 'desc' },
+        take: 10,
       }),
       prisma.department.count({ where: { companyId: cId, type: 'DIVISION' } }),
       prisma.department.count({ where: { companyId: cId, type: 'DEPARTMENT' } }),
       prisma.department.count({ where: { companyId: cId, type: 'TEAM' } }),
       prisma.department.count({ where: { companyId: cId, type: 'SUBTEAM' } }),
-      prisma.employee.count({ where: { companyId: cId, position: { level: { in: ['CEO', 'CXO'] } } } }),
-      prisma.employee.findMany({ where: { companyId: cId }, select: { dateOfJoining: true, createdAt: true } })
+      prisma.employee.findMany({
+        where: { companyId: cId },
+        select: { dateOfJoining: true, createdAt: true },
+      }),
+      prisma.employee.findFirst({
+        where: {
+          companyId: cId,
+          OR: [
+            { position: { level: 'CEO' } },
+            { position: { title: { contains: 'CEO' } } },
+          ],
+        },
+        select: { id: true },
+      }),
+      prisma.employee.count({
+        where: {
+          companyId: cId,
+          dateOfJoining: { gte: startOfMonth, lt: startOfNextMonth },
+        },
+      }),
+      prisma.employee.count({
+        where: {
+          companyId: cId,
+          dateOfLeaving: { gte: startOfMonth, lt: startOfNextMonth },
+        },
+      }),
+      prisma.user.count({
+        where: {
+          companyId: cId,
+          isCxo: true,
+          isActive: true,
+        },
+      }),
     ])
 
     // Get names for grouping
@@ -245,7 +307,14 @@ export default async function analyticsRoutes(app) {
         total, active, inactive: total - active,
         totalUnits: divCount + deptCount,
         totalTeams: teamCount + subteamCount,
-        leadershipCount: leaders,
+        totalOrgUnits: divCount + deptCount + teamCount + subteamCount,
+        leadershipCount: ceo ? await prisma.employee.count({ where: { companyId: cId, managerId: ceo.id } }) : 0,
+        leadershipTeamCount: ceo ? await prisma.employee.count({ where: { companyId: cId, managerId: ceo.id } }) : 0,
+        cxoCount,
+        movement: {
+          hiredThisMonth,
+          leftThisMonth
+        },
         genderBreakdown: byGender,
         recentJoiners,
         charts: {

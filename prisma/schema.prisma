@@ -48,6 +48,7 @@ model User {
   firstName   String
   lastName    String
   avatar      String?
+  isCxo       Boolean  @default(false)
   isActive    Boolean  @default(true)
   lastLogin   DateTime?
   createdAt   DateTime @default(now())

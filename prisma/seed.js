@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
@@ -27,12 +28,12 @@ async function main() {
 
   // Create roles
   const roleData = [
-    { name: 'CLIENT_ADMIN', displayName: 'Client Admin', description: 'Full system access', permissions: { all: true } },
-    { name: 'CEO', displayName: 'CEO', description: 'Company-wide OKR access', permissions: { okr: 'all', hrms: 'view' } },
-    { name: 'CXO', displayName: 'CXO', description: 'C-Level OKR access', permissions: { okr: 'all', hrms: 'view' } },
-    { name: 'MANAGER', displayName: 'Manager', description: 'Team management access', permissions: { okr: 'team', hrms: 'team' } },
+    { name: 'CLIENT_ADMIN', displayName: 'Client Admin', description: 'Full system access', permissions: { all: true, manage_permissions: true } },
+    { name: 'CEO', displayName: 'CEO', description: 'Company-wide access', permissions: { okr: 'all', hrms: 'all', view_dashboard: true } },
+    { name: 'CXO', displayName: 'CXO', description: 'C-Level access', permissions: { okr: 'all', hrms: 'view', view_dashboard: true } },
+    { name: 'MANAGER', displayName: 'Manager', description: 'Team management access', permissions: { okr: 'team', hrms: 'team', manage_employees: true } },
     { name: 'FLM', displayName: 'Front Line Manager', description: 'Frontline manager access', permissions: { okr: 'team', hrms: 'team' } },
-    { name: 'IC', displayName: 'Individual Contributor', description: 'Own OKR access', permissions: { okr: 'own' } }
+    { name: 'IC', displayName: 'Individual Contributor', description: 'Own OKR access', permissions: { okr: 'own', view_dashboard: true } }
   ]
 
   const roles = {}
@@ -112,7 +113,13 @@ async function main() {
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@corp.com' },
-    update: {},
+    update: {
+      password: adminPassword,
+      isActive: true,
+      firstName: 'Super',
+      lastName: 'Admin',
+      employeeId: adminEmp.id
+    },
     create: {
       companyId: company.id,
       employeeId: adminEmp.id,
@@ -225,6 +232,197 @@ async function main() {
         }
       ]
     })
+  }
+
+  // ---------- Seed We Matter org structure & employees ----------
+  const wemCompany = await prisma.company.upsert({
+    where: { code: 'WEM-01' },
+    update: {},
+    create: {
+      name: 'We Matter HRMS',
+      code: 'WEM-01',
+      industry: 'Services',
+      website: 'https://we-matter.com',
+      email: 'info@we-matter.com',
+      phone: '+91 00000 00000',
+      address: 'India',
+      city: 'Mumbai',
+      country: 'India'
+    }
+  })
+
+  const wemRows = [
+    { division: 'Executive', department: '', team: '', subteam: '', employeeCode: 'WEM001', firstName: 'Prashant', lastName: 'Shrivastva', email: 'prashant.srivastava@we-matter.com', jobRole: 'CEO', status: 'ACTIVE', reportingManager: '', hireDate: '1/12/2025' },
+    { division: 'Executive', department: 'Business Development', team: '', subteam: '', employeeCode: 'WEM002', firstName: 'Saurav', lastName: 'Jain', email: 'saurabh.jain@we-matter.com', jobRole: 'Business Head', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '2/12/2025' },
+    { division: 'Executive', department: 'Sales', team: '', subteam: '', employeeCode: 'WEM005', firstName: 'Pankaj', lastName: 'Pipariya', email: 'pankaj.pipariya@we-matter.com', jobRole: 'Sales Head', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '3/12/2025' },
+    { division: 'Executive', department: 'CEO Office', team: '', subteam: '', employeeCode: 'WEM003', firstName: 'Diya', lastName: 'Dubey', email: 'diya.dubey@we-matter.com', jobRole: 'Chief of Staff', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '7/12/2025' },
+    { division: 'Executive', department: 'Digital Marketing', team: '', subteam: '', employeeCode: 'WEM022', firstName: 'Saurav', lastName: 'Ghosh', email: 'digital03@we-matter.com', jobRole: 'Digital Marketing Associate', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '12-18-2025' },
+    { division: 'Executive', department: 'Legal', team: '', subteam: '', employeeCode: 'WEM018', firstName: 'Maithili', lastName: 'Gala', email: 'legal@we-matter.com', jobRole: 'Legal & Accounts', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '12-21-2025' },
+    { division: 'Executive', department: 'Human Science', team: '', subteam: '', employeeCode: 'WEM007', firstName: 'Hadiya', lastName: 'Hussain', email: 'hadiya.hussain@we-matter.com', jobRole: 'Associate Human Resource', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '9/12/2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: '', employeeCode: 'WEM006', firstName: 'Manish', lastName: 'Ukirade', email: 'developer01@we-matter.com', jobRole: 'Tech Lead', status: 'ACTIVE', reportingManager: 'WEM002', hireDate: '4/12/2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Aps sub team', employeeCode: 'WEM008', firstName: 'Sudhir', lastName: 'Gomase', email: 'developer02@we-matter.com', jobRole: 'Sr. Backend Developer', status: 'ACTIVE', reportingManager: 'WEM006', hireDate: '10/12/2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Dashboard sub team', employeeCode: 'WEM019', firstName: 'Zaheer', lastName: 'Shaikh', email: 'developer14@we-matter.com', jobRole: 'Sr. Software Developer', status: 'ACTIVE', reportingManager: 'WEM006', hireDate: '12-15-2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Aps sub team', employeeCode: 'WEM025', firstName: 'Amit', lastName: 'Gadodiya', email: 'developer05@we-matter.com', jobRole: 'Senior Backend Developer', status: 'ACTIVE', reportingManager: 'WEM008', hireDate: '12-17-2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Dashboard sub team', employeeCode: 'WEM012', firstName: 'Aryan', lastName: 'Shukla', email: 'developer04@we-matter.com', jobRole: 'Frontend Developer', status: 'ACTIVE', reportingManager: 'WEM019', hireDate: '12-14-2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Dashboard sub team', employeeCode: 'WEM046', firstName: 'Ved', lastName: 'Goyal', email: 'developer03@we-matter.com', jobRole: 'UI/UX Designer', status: 'ACTIVE', reportingManager: 'WEM019', hireDate: '12-22-2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Aps sub team', employeeCode: 'WEM047', firstName: 'Aadit', lastName: 'Jha', email: 'developer06@we-matter.com', jobRole: 'Fullstack AI Engineer', status: 'ACTIVE', reportingManager: 'WEM008', hireDate: '12-24-2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Engineering Team', subteam: 'Aps sub team', employeeCode: 'WEM048', firstName: 'Swarangi', lastName: 'Shirsekar', email: 'developer07@we-matter.com', jobRole: 'Fullstack AI Engineer', status: 'ACTIVE', reportingManager: 'WEM008', hireDate: '12-25-2025' },
+    { division: 'Executive', department: 'Business Development', team: 'Events Team', subteam: '', employeeCode: 'WEM044', firstName: 'Parth', lastName: 'Prajapati', email: 'we-awards@we-matter.com', jobRole: 'Business Awards Executive', status: 'ACTIVE', reportingManager: 'WEM002', hireDate: '12-23-2025' },
+    { division: 'Executive', department: 'Sales', team: 'Sales Team', subteam: '', employeeCode: 'WEM004', firstName: 'Paree', lastName: 'Makwana', email: 'paree.makwana@we-matter.com', jobRole: 'Sales Head', status: 'ACTIVE', reportingManager: 'WEM005', hireDate: '8/12/2025' },
+    { division: 'Executive', department: 'Sales', team: '', subteam: '', employeeCode: 'WEM041', firstName: 'Aayush', lastName: 'Saini', email: 'aayush.saini@we-matter.com', jobRole: 'Business Development Head', status: 'ACTIVE', reportingManager: 'WEM005', hireDate: '12-26-2025' },
+    { division: 'Executive', department: 'Sales', team: 'Sales Team', subteam: '', employeeCode: 'WEM010', firstName: 'Nikhil', lastName: 'Sawant', email: 'nikhil.sawant@we-matter.com', jobRole: 'Client Growth Executive', status: 'ACTIVE', reportingManager: 'WEM004', hireDate: '5/12/2025' },
+    { division: 'Executive', department: 'Sales', team: 'Sales Team', subteam: '', employeeCode: 'WEM021', firstName: 'Hitanshi', lastName: 'Thakkar', email: 'hitanshi.thakkar@we-matter.com', jobRole: 'Client Growth Executive', status: 'ACTIVE', reportingManager: 'WEM004', hireDate: '12-16-2025' },
+    { division: 'Executive', department: 'Sales', team: 'Sales Team', subteam: '', employeeCode: 'WEM024', firstName: 'Vedant', lastName: 'Khamkar', email: 'vedant.khamkar@we-matter.com', jobRole: 'Client Growth Executive', status: 'ACTIVE', reportingManager: 'WEM004', hireDate: '12-19-2025' },
+    { division: 'Executive', department: 'Digital Marketing', team: 'Marketing Team', subteam: '', employeeCode: 'WEM020', firstName: 'Mohanish', lastName: 'Gadhari', email: 'digital01@we-matter.com', jobRole: 'Digital Marketing Executive', status: 'ACTIVE', reportingManager: 'WEM022', hireDate: '12-13-2025' },
+    { division: 'Executive', department: 'Human Resources', team: 'Human Resource Team', subteam: '', employeeCode: 'WEM050', firstName: 'Harshada', lastName: 'Natbhanjan', email: 'harshada.natbhanjan@we-matter.com', jobRole: 'HR Consultant', status: 'ACTIVE', reportingManager: 'WEM011', hireDate: '12/12/2025' },
+    { division: 'Executive', department: 'Human Science', team: '', subteam: '', employeeCode: 'WEM043', firstName: 'Kamalavathi', lastName: 'Mudliyar', email: 'kamlavathi.mudliyar@we-matter.com', jobRole: 'HR Consultant', status: 'ACTIVE', reportingManager: 'WEM007', hireDate: '12-20-2025' },
+    { division: 'Executive', department: 'Human Science', team: '', subteam: '', employeeCode: 'WEM009', firstName: 'Omkaar', lastName: 'Mhatre', email: 'we.support01@we-matter.com', jobRole: 'Data Analyst', status: 'ACTIVE', reportingManager: 'WEM007', hireDate: '11/12/2025' },
+    { division: 'Executive', department: 'Human Resources', team: '', subteam: '', employeeCode: 'WEM011', firstName: 'Riya', lastName: 'Deshmukh', email: 'riya.deshmukh@we-matter.com', jobRole: 'HR Recruiter', status: 'ACTIVE', reportingManager: 'WEM001', hireDate: '6/12/2025' },
+  ]
+
+  const deptCache = {}
+  function makeCode(name) {
+    return name.toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 16)
+  }
+  function parseWemDate(s) {
+    if (!s) return undefined
+    if (s.includes('/')) {
+      const [d, m, y] = s.split('/')
+      return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`)
+    }
+    if (s.includes('-')) {
+      const [m, d, y] = s.split('-')
+      return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`)
+    }
+    return undefined
+  }
+
+  async function ensureDeptPath(row) {
+    const levels = [
+      { value: row.division, type: 'DIVISION' },
+      { value: row.department, type: 'DEPARTMENT' },
+      { value: row.team, type: 'TEAM' },
+      { value: row.subteam, type: 'SUBTEAM' },
+    ]
+    let parentId = null
+    let lastId = null
+
+    for (const level of levels) {
+      if (!level.value) continue
+      const key = `${level.value}|${parentId || 'root'}`
+      if (deptCache[key]) {
+        parentId = deptCache[key].id
+        lastId = parentId
+        continue
+      }
+      const code = makeCode(level.value)
+      const dept = await prisma.department.upsert({
+        where: { companyId_code: { companyId: wemCompany.id, code } },
+        update: {},
+        create: {
+          companyId: wemCompany.id,
+          parentId,
+          name: level.value,
+          code,
+          type: level.type,
+        },
+      })
+      deptCache[key] = dept
+      parentId = dept.id
+      lastId = dept.id
+    }
+    return lastId
+  }
+
+  const positionCache = {}
+  const wemEmpByCode = {}
+
+  // First pass: create departments, positions, employees without manager links
+  for (const row of wemRows) {
+    const deptId = await ensureDeptPath(row)
+    const posKey = row.jobRole || 'Employee'
+    let pos = positionCache[posKey]
+    if (!pos) {
+      pos = await prisma.position.create({
+        data: {
+          companyId: wemCompany.id,
+          departmentId: deptId,
+          title: row.jobRole || 'Employee',
+          level: undefined,
+        },
+      })
+      positionCache[posKey] = pos
+    }
+
+    const emp = await prisma.employee.upsert({
+      where: { companyId_employeeCode: { companyId: wemCompany.id, employeeCode: row.employeeCode } },
+      update: {
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        status: row.status || 'ACTIVE',
+        departmentId: deptId,
+        positionId: pos.id,
+        dateOfJoining: parseWemDate(row.hireDate) || new Date('2025-12-01'),
+      },
+      create: {
+        companyId: wemCompany.id,
+        employeeCode: row.employeeCode,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        status: row.status || 'ACTIVE',
+        employmentType: 'FULL_TIME',
+        departmentId: deptId,
+        positionId: pos.id,
+        dateOfJoining: parseWemDate(row.hireDate) || new Date('2025-12-01'),
+      },
+    })
+    wemEmpByCode[row.employeeCode] = emp
+  }
+
+  // Second pass: wire reporting manager
+  for (const row of wemRows) {
+    if (!row.reportingManager) continue
+    const emp = wemEmpByCode[row.employeeCode]
+    const mgr = wemEmpByCode[row.reportingManager]
+    if (emp && mgr && emp.managerId !== mgr.id) {
+      await prisma.employee.update({
+        where: { id: emp.id },
+        data: { managerId: mgr.id },
+      })
+    }
+  }
+
+  // Create CLIENT_ADMIN user for support email
+  const wemSupportEmp = wemEmpByCode['WEM009']
+  if (wemSupportEmp) {
+    const supportPassword = await bcrypt.hash('Welcome@123', 12)
+    const wemSupportUser = await prisma.user.upsert({
+      where: { email: 'we.support01@we-matter.com' },
+      update: {
+        isCxo: true,
+        firstName: wemSupportEmp.firstName,
+        lastName: wemSupportEmp.lastName,
+        employeeId: wemSupportEmp.id,
+        isActive: true,
+      },
+      create: {
+        companyId: wemCompany.id,
+        employeeId: wemSupportEmp.id,
+        email: 'we.support01@we-matter.com',
+        password: supportPassword,
+        firstName: wemSupportEmp.firstName,
+        lastName: wemSupportEmp.lastName,
+        isCxo: true,
+      },
+    })
+    await prisma.userRole.upsert({
+      where: { userId_roleId: { userId: wemSupportUser.id, roleId: roles['CLIENT_ADMIN'].id } },
+      update: {},
+      create: { userId: wemSupportUser.id, roleId: roles['CLIENT_ADMIN'].id },
+    })
+    console.log('✅ We Matter support user set as CLIENT_ADMIN: we.support01@we-matter.com / Welcome@123')
   }
 
   console.log('✅ OKR Cycle and objectives created')

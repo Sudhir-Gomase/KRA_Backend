@@ -21,7 +21,8 @@ export default async function employeeRoutes(app) {
   app.get('/', { onRequest: [app.authenticate] }, async (request, reply) => {
     const {
       companyId, departmentId, positionId, managerId, status,
-      employmentType, search, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc'
+      employmentType, search, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc',
+      dateOfJoiningFrom, dateOfJoiningTo
     } = request.query
 
     const cId = companyId || request.user.companyId
@@ -34,6 +35,14 @@ export default async function employeeRoutes(app) {
       ...(managerId ? { managerId } : {}),
       ...(status ? { status } : {}),
       ...(employmentType ? { employmentType } : {}),
+      ...(dateOfJoiningFrom || dateOfJoiningTo
+        ? {
+          dateOfJoining: {
+            ...(dateOfJoiningFrom ? { gte: new Date(dateOfJoiningFrom) } : {}),
+            ...(dateOfJoiningTo ? { lte: new Date(dateOfJoiningTo) } : {}),
+          }
+        }
+        : {}),
       ...(search ? {
         OR: [
           { firstName: { contains: search } },
